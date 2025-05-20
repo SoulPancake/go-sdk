@@ -2711,6 +2711,9 @@ func (client *OpenFgaClient) ListRelationsExecute(request SdkClientListRelations
 
 	var relations []string
 	for index := 0; index < len(*batchResponse); index++ {
+		if (*batchResponse)[index].Error != nil {
+			return nil, fmt.Errorf("ListRelations - error in batch response: %v", (*batchResponse)[index].Error)
+		}
 		if (*batchResponse)[index].GetAllowed() {
 			relations = append(relations, (*batchResponse)[index].Request.Relation)
 		}
