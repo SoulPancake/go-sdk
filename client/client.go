@@ -2058,16 +2058,16 @@ func (request *SdkClientBatchCheckClientRequest) GetOptions() *ClientBatchCheckC
 }
 
 func (client *OpenFgaClient) ClientBatchCheckExecute(request SdkClientBatchCheckClientRequestInterface) (*ClientBatchCheckClientResponse, error) {
-	group, ctx := errgroup.WithContext(request.GetContext())
 	var maxParallelReqs int
 	if request.GetOptions() == nil || request.GetOptions().MaxParallelRequests == nil {
 		maxParallelReqs = int(DEFAULT_MAX_METHOD_PARALLEL_REQS)
 	} else {
 		maxParallelReqs = int(*request.GetOptions().MaxParallelRequests)
 	}
-	group.SetLimit(maxParallelReqs)
+
 	var numOfChecks = len(*request.GetBody())
 	response := make(ClientBatchCheckClientResponse, numOfChecks)
+
 	authorizationModelId, err := client.getAuthorizationModelId(request.GetAuthorizationModelIdOverride())
 	if err != nil {
 		return nil, err
@@ -2087,32 +2087,45 @@ func (client *OpenFgaClient) ClientBatchCheckExecute(request SdkClientBatchCheck
 		checkOptions.Consistency = request.GetOptions().Consistency
 	}
 
+	// Create a wait group with a limit
+	taskPool := pool.New().WithMaxGoroutines(maxParallelReqs)
 	for index, checkBody := range *request.GetBody() {
 		index, checkBody := index, checkBody
-		group.Go(func() error {
+		taskPool.Go(func() {
 			singleResponse, err := client.CheckExecute(&SdkClientCheckRequest{
-				ctx:     ctx,
+				ctx:     request.GetContext(),
 				Client:  client,
 				body:    &checkBody,
 				options: checkOptions,
 			})
 
-			if _, ok := err.(fgaSdk.FgaApiAuthenticationError); ok {
-				return err
+			// In case of an authentication error, we'll store it and check later
+			if _, ok := err.(fgaSdk.FgaApiAuthenticationError); !ok {
+				response[index] = ClientBatchCheckClientSingleResponse{
+					Request:             checkBody,
+					ClientCheckResponse: *singleResponse,
+					Error:               err,
+				}
+			} else {
+				// Store the auth error to be detected after Wait()
+				response[index] = ClientBatchCheckClientSingleResponse{
+					Request: checkBody,
+					Error:   err,
+				}
 			}
-
-			response[index] = ClientBatchCheckClientSingleResponse{
-				Request:             checkBody,
-				ClientCheckResponse: *singleResponse,
-				Error:               err,
-			}
-
-			return nil
 		})
 	}
 
-	if err := group.Wait(); err != nil {
-		return nil, err
+	// Wait for all goroutines to complete
+	taskPool.Wait()
+
+	// Check if any authentication errors occurred
+	for _, resp := range response {
+		if resp.Error != nil {
+			if _, ok := resp.Error.(fgaSdk.FgaApiAuthenticationError); ok {
+				return nil, resp.Error
+			}
+		}
 	}
 
 	return &response, nil
