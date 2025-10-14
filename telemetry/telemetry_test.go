@@ -227,6 +227,32 @@ func TestBuildTelemetryAttributesMethod(t *testing.T) {
 	}
 }
 
+func TestGetSameInstanceForIdenticalConfigurations(t *testing.T) {
+	config1 := DefaultTelemetryConfiguration()
+	config2 := DefaultTelemetryConfiguration()
+
+	telemetry1 := Get(TelemetryFactoryParameters{Configuration: config1})
+	telemetry2 := Get(TelemetryFactoryParameters{Configuration: config2})
+
+	if telemetry1 != telemetry2 {
+		t.Fatalf("Expected same telemetry instance for identical configurations, but got different instances")
+	}
+}
+
+func TestGetDifferentInstancesForDifferentConfigurations(t *testing.T) {
+	config1 := DefaultTelemetryConfiguration()
+	config2 := &Configuration{
+		Metrics: &MetricsConfiguration{},
+	}
+
+	telemetry1 := Get(TelemetryFactoryParameters{Configuration: config1})
+	telemetry2 := Get(TelemetryFactoryParameters{Configuration: config2})
+
+	if telemetry1 == telemetry2 {
+		t.Fatalf("Expected different telemetry instances for different configurations, but got the same instance")
+	}
+}
+
 // Run this test with the "-race" flag.
 //
 //	go test -race -run ^TestGetRace$ github.com/openfga/go-sdk/telemetry
