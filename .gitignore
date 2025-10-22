@@ -50,6 +50,6 @@ VERSION.txt
 git_push.sh
 
 # Ignore compiled example binaries
-./example/example1/example1
-./example/streamed-list-objects/streamed-list-objects
-./example/opentelemetry/opentelemetry
+example/example1/example1
+example/streamed-list-objects/streamed-list-objects
+example/opentelemetry/opentelemetry
