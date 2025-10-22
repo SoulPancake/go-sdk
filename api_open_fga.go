@@ -15,6 +15,7 @@ package openfga
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log"
@@ -475,6 +476,28 @@ type OpenFgaApi interface {
 	 * @return ListObjectsResponse
 	 */
 	ListObjectsExecute(r ApiListObjectsRequest) (ListObjectsResponse, *http.Response, error)
+
+	/*
+		 * StreamedListObjects List all objects of the given type that the user has a relation with (streaming)
+		 * The StreamedListObjects API is a streaming version of the ListObjects API that returns results as they are computed.
+	 To arrive at a result, the API uses: an authorization model, explicit tuples written through the Write API, contextual tuples present in the request, and implicit tuples that exist by virtue of applying set theory (such as `document:2021-budget#viewer@document:2021-budget#viewer`; the set of users who are viewers of `document:2021-budget` are the set of users who are the viewers of `document:2021-budget`).
+	An `authorization_model_id` may be specified in the body. If it is not specified, the latest authorization model ID will be used. It is strongly recommended to specify authorization model id for better performance.
+	You may also specify `contextual_tuples` that will be treated as regular tuples. Each of these tuples may have an associated `condition`.
+	You may also provide a `context` object that will be used to evaluate the conditioned tuples in the system. It is strongly recommended to provide a value for all the input parameters of all the conditions, to ensure that all tuples be evaluated correctly.
+	By default, the Check API caches results for a short time to optimize performance. You may specify a value of `HIGHER_CONSISTENCY` for the optional `consistency` parameter in the body to inform the server that higher conisistency is preferred at the expense of increased latency. Consideration should be given to the increased latency if requesting higher consistency.
+	The response will stream the related objects one at a time in the "object" field and they will be strings in the object format `<type>:<id>` (e.g. "document:roadmap").
+	The objects given will not be sorted, and therefore two identical calls can give a given different set of objects.
+		 * @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+		 * @param storeId
+		 * @return ApiStreamedListObjectsRequest
+	*/
+	StreamedListObjects(ctx context.Context, storeId string) ApiStreamedListObjectsRequest
+
+	/*
+	 * StreamedListObjectsExecute executes the request
+	 * @return channel of StreamedListObjectsResponse
+	 */
+	StreamedListObjectsExecute(r ApiStreamedListObjectsRequest) (<-chan StreamedListObjectsResponse, <-chan error)
 
 	/*
 		 * ListStores List all stores
@@ -2584,6 +2607,128 @@ func (a *OpenFgaApiService) ListObjectsExecute(r ApiListObjectsRequest) (ListObj
 
 	// should never have reached this
 	return returnValue, nil, reportError("Error not handled properly")
+}
+
+type ApiStreamedListObjectsRequest struct {
+	ctx        context.Context
+	ApiService OpenFgaApi
+	storeId    string
+	body       *ListObjectsRequest
+	options    RequestOptions
+}
+
+func (r ApiStreamedListObjectsRequest) Body(body ListObjectsRequest) ApiStreamedListObjectsRequest {
+	r.body = &body
+	return r
+}
+
+func (r ApiStreamedListObjectsRequest) Options(options RequestOptions) ApiStreamedListObjectsRequest {
+	r.options = options
+	return r
+}
+
+func (r ApiStreamedListObjectsRequest) Execute() (<-chan StreamedListObjectsResponse, <-chan error) {
+	return r.ApiService.StreamedListObjectsExecute(r)
+}
+
+func (a *OpenFgaApiService) StreamedListObjects(ctx context.Context, storeId string) ApiStreamedListObjectsRequest {
+	return ApiStreamedListObjectsRequest{
+		ApiService: a,
+		ctx:        ctx,
+		storeId:    storeId,
+	}
+}
+
+func (a *OpenFgaApiService) StreamedListObjectsExecute(r ApiStreamedListObjectsRequest) (<-chan StreamedListObjectsResponse, <-chan error) {
+	const (
+		operationName = "StreamedListObjects"
+		httpMethod    = http.MethodPost
+	)
+	
+	objectChan := make(chan StreamedListObjectsResponse)
+	errorChan := make(chan error, 1)
+
+	go func() {
+		defer close(objectChan)
+		defer close(errorChan)
+
+		var requestBody interface{}
+
+		path := "/stores/{store_id}/streamed-list-objects"
+		if r.storeId == "" {
+			errorChan <- reportError("storeId is required and must be specified")
+			return
+		}
+
+		path = strings.ReplaceAll(path, "{"+"store_id"+"}", url.PathEscape(parameterToString(r.storeId, "")))
+
+		localVarHeaderParams := make(map[string]string)
+		localVarQueryParams := url.Values{}
+		if r.body == nil {
+			errorChan <- reportError("body is required and must be specified")
+			return
+		}
+
+		localVarHTTPContentTypes := []string{"application/json"}
+		localVarHTTPContentType := selectHeaderContentType(localVarHTTPContentTypes)
+		if localVarHTTPContentType != "" {
+			localVarHeaderParams["Content-Type"] = localVarHTTPContentType
+		}
+
+		localVarHTTPHeaderAccepts := []string{"application/json", "text/event-stream"}
+		localVarHTTPHeaderAccept := selectHeaderAccept(localVarHTTPHeaderAccepts)
+		if localVarHTTPHeaderAccept != "" {
+			localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
+		}
+
+		requestBody = r.body
+
+		for header, val := range r.options.Headers {
+			localVarHeaderParams[header] = val
+		}
+
+		req, err := a.client.prepareRequest(r.ctx, path, httpMethod, requestBody, localVarHeaderParams, localVarQueryParams)
+		if err != nil {
+			errorChan <- err
+			return
+		}
+
+		httpResponse, err := a.client.callAPI(req)
+		if err != nil || httpResponse == nil {
+			errorChan <- err
+			return
+		}
+		defer httpResponse.Body.Close()
+
+		if httpResponse.StatusCode >= http.StatusMultipleChoices {
+			responseBody, _ := io.ReadAll(httpResponse.Body)
+			err := a.client.handleAPIError(httpResponse, responseBody, requestBody, operationName, r.storeId)
+			errorChan <- err
+			return
+		}
+
+		decoder := json.NewDecoder(httpResponse.Body)
+		for {
+			var response StreamedListObjectsResponse
+			err := decoder.Decode(&response)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				errorChan <- err
+				return
+			}
+
+			select {
+			case objectChan <- response:
+			case <-r.ctx.Done():
+				errorChan <- r.ctx.Err()
+				return
+			}
+		}
+	}()
+
+	return objectChan, errorChan
 }
 
 type ApiListStoresRequest struct {

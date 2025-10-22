@@ -425,6 +425,19 @@ type SdkClient interface {
 	ListObjectsExecute(request SdkClientListObjectsRequestInterface) (*ClientListObjectsResponse, error)
 
 	/*
+	 * StreamedListObjects List the objects of a particular type a user has access to (streaming).
+	 * @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	 * @return SdkClientStreamedListObjectsRequestInterface
+	 */
+	StreamedListObjects(ctx _context.Context) SdkClientStreamedListObjectsRequestInterface
+
+	/*
+	 * StreamedListObjectsExecute executes the StreamedListObjects request
+	 * @return channels for streaming objects
+	 */
+	StreamedListObjectsExecute(request SdkClientStreamedListObjectsRequestInterface) (<-chan ClientStreamedListObjectsResponse, <-chan error)
+
+	/*
 	 * ListRelations List the relations a user has on an object.
 	 * @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
 	 * @return SdkClientListRelationsRequestInterface
@@ -2778,6 +2791,129 @@ func (client *OpenFgaClient) ListObjectsExecute(request SdkClientListObjectsRequ
 		return nil, err
 	}
 	return &data, nil
+}
+
+type SdkClientStreamedListObjectsRequest struct {
+	ctx     _context.Context
+	Client  *OpenFgaClient
+	body    *ClientStreamedListObjectsRequest
+	options *ClientStreamedListObjectsOptions
+}
+
+type SdkClientStreamedListObjectsRequestInterface interface {
+	Options(options ClientStreamedListObjectsOptions) SdkClientStreamedListObjectsRequestInterface
+	Body(body ClientStreamedListObjectsRequest) SdkClientStreamedListObjectsRequestInterface
+	Execute() (<-chan ClientStreamedListObjectsResponse, <-chan error)
+	GetContext() _context.Context
+	GetAuthorizationModelIdOverride() *string
+	GetStoreIdOverride() *string
+	GetBody() *ClientStreamedListObjectsRequest
+	GetOptions() *ClientStreamedListObjectsOptions
+}
+
+type ClientStreamedListObjectsRequest struct {
+	User             string                        `json:"user"`
+	Relation         string                        `json:"relation"`
+	Type             string                        `json:"type"`
+	ContextualTuples []ClientContextualTupleKey    `json:"contextual_tuples,omitempty"`
+	Context          *map[string]interface{}       `json:"context,omitempty"`
+}
+
+type ClientStreamedListObjectsOptions struct {
+	RequestOptions
+	AuthorizationModelIdOptions
+	Consistency *fgaSdk.ConsistencyPreference `json:"consistency,omitempty"`
+}
+
+type ClientStreamedListObjectsResponse = fgaSdk.StreamedListObjectsResponse
+
+func (client *OpenFgaClient) StreamedListObjects(ctx _context.Context) SdkClientStreamedListObjectsRequestInterface {
+	return &SdkClientStreamedListObjectsRequest{
+		Client: client,
+		ctx:    ctx,
+	}
+}
+
+func (request *SdkClientStreamedListObjectsRequest) Options(options ClientStreamedListObjectsOptions) SdkClientStreamedListObjectsRequestInterface {
+	request.options = &options
+	return request
+}
+
+func (request *SdkClientStreamedListObjectsRequest) GetAuthorizationModelIdOverride() *string {
+	if request.options != nil {
+		return request.options.AuthorizationModelId
+	}
+	return nil
+}
+
+func (request *SdkClientStreamedListObjectsRequest) GetStoreIdOverride() *string {
+	return nil
+}
+
+func (request *SdkClientStreamedListObjectsRequest) Body(body ClientStreamedListObjectsRequest) SdkClientStreamedListObjectsRequestInterface {
+	request.body = &body
+	return request
+}
+
+func (request *SdkClientStreamedListObjectsRequest) Execute() (<-chan ClientStreamedListObjectsResponse, <-chan error) {
+	return request.Client.StreamedListObjectsExecute(request)
+}
+
+func (request *SdkClientStreamedListObjectsRequest) GetContext() _context.Context {
+	return request.ctx
+}
+
+func (request *SdkClientStreamedListObjectsRequest) GetBody() *ClientStreamedListObjectsRequest {
+	return request.body
+}
+
+func (request *SdkClientStreamedListObjectsRequest) GetOptions() *ClientStreamedListObjectsOptions {
+	return request.options
+}
+
+func (client *OpenFgaClient) StreamedListObjectsExecute(request SdkClientStreamedListObjectsRequestInterface) (<-chan ClientStreamedListObjectsResponse, <-chan error) {
+	var contextualTuples []ClientContextualTupleKey
+	if request.GetBody().ContextualTuples != nil {
+		for index := 0; index < len(request.GetBody().ContextualTuples); index++ {
+			contextualTuples = append(contextualTuples, (request.GetBody().ContextualTuples)[index])
+		}
+	}
+	authorizationModelId, err := client.getAuthorizationModelId(request.GetAuthorizationModelIdOverride())
+	if err != nil {
+		errChan := make(chan error, 1)
+		objChan := make(chan ClientStreamedListObjectsResponse)
+		errChan <- err
+		close(errChan)
+		close(objChan)
+		return objChan, errChan
+	}
+	storeId, err := client.getStoreId(request.GetStoreIdOverride())
+	if err != nil {
+		errChan := make(chan error, 1)
+		objChan := make(chan ClientStreamedListObjectsResponse)
+		errChan <- err
+		close(errChan)
+		close(objChan)
+		return objChan, errChan
+	}
+	body := fgaSdk.ListObjectsRequest{
+		User:                 request.GetBody().User,
+		Relation:             request.GetBody().Relation,
+		Type:                 request.GetBody().Type,
+		ContextualTuples:     fgaSdk.NewContextualTupleKeys(contextualTuples),
+		Context:              request.GetBody().Context,
+		AuthorizationModelId: authorizationModelId,
+	}
+	requestOptions := RequestOptions{}
+	if request.GetOptions() != nil {
+		requestOptions = request.GetOptions().RequestOptions
+		body.Consistency = request.GetOptions().Consistency
+	}
+	return client.OpenFgaApi.
+		StreamedListObjects(request.GetContext(), *storeId).
+		Body(body).
+		Options(requestOptions).
+		Execute()
 }
 
 /// ListRelations
