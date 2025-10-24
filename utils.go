@@ -18,40 +18,29 @@ import (
 	"time"
 )
 
-// ToPtr is a generic helper routine that returns a pointer to the given value of any type.
-func ToPtr[T any](v T) *T { return &v }
-
 // PtrBool is a helper routine that returns a pointer to given boolean value.
-// Deprecated: Use ToPtr instead.
-func PtrBool(v bool) *bool { return ToPtr(v) }
+func PtrBool(v bool) *bool { return &v }
 
 // PtrInt is a helper routine that returns a pointer to given integer value.
-// Deprecated: Use ToPtr instead.
-func PtrInt(v int) *int { return ToPtr(v) }
+func PtrInt(v int) *int { return &v }
 
 // PtrInt32 is a helper routine that returns a pointer to given integer value.
-// Deprecated: Use ToPtr instead.
-func PtrInt32(v int32) *int32 { return ToPtr(v) }
+func PtrInt32(v int32) *int32 { return &v }
 
 // PtrInt64 is a helper routine that returns a pointer to given integer value.
-// Deprecated: Use ToPtr instead.
-func PtrInt64(v int64) *int64 { return ToPtr(v) }
+func PtrInt64(v int64) *int64 { return &v }
 
 // PtrFloat32 is a helper routine that returns a pointer to given float value.
-// Deprecated: Use ToPtr instead.
-func PtrFloat32(v float32) *float32 { return ToPtr(v) }
+func PtrFloat32(v float32) *float32 { return &v }
 
 // PtrFloat64 is a helper routine that returns a pointer to given float value.
-// Deprecated: Use ToPtr instead.
-func PtrFloat64(v float64) *float64 { return ToPtr(v) }
+func PtrFloat64(v float64) *float64 { return &v }
 
 // PtrString is a helper routine that returns a pointer to given string value.
-// Deprecated: Use ToPtr instead.
-func PtrString(v string) *string { return ToPtr(v) }
+func PtrString(v string) *string { return &v }
 
 // PtrTime is helper routine that returns a pointer to given Time value.
-// Deprecated: Use ToPtr instead.
-func PtrTime(v time.Time) *time.Time { return ToPtr(v) }
+func PtrTime(v time.Time) *time.Time { return &v }
 
 type NullableBool struct {
 	value *bool
