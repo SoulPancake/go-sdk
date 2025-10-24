@@ -790,6 +790,12 @@ type OpenFgaApi interface {
 	StreamedListObjectsExecute(r ApiStreamedListObjectsRequest) (StreamResultOfStreamedListObjectsResponse, *http.Response, error)
 
 	/*
+	 * StreamedListObjectsWithChannel executes the request and returns a channel for streaming results
+	 * @return *StreamedListObjectsChannel
+	 */
+	StreamedListObjectsWithChannel(r ApiStreamedListObjectsRequest) (*StreamedListObjectsChannel, *http.Response, error)
+
+	/*
 		 * Write Add or delete tuples from the store
 		 * The Write API will transactionally update the tuples for a certain store. Tuples and type definitions allow OpenFGA to determine whether a relationship exists between an object and an user.
 	In the body, `writes` adds new tuples and `deletes` removes existing tuples. When deleting a tuple, any `condition` specified with it is ignored.
@@ -4208,6 +4214,10 @@ func (r ApiStreamedListObjectsRequest) Options(options RequestOptions) ApiStream
 
 func (r ApiStreamedListObjectsRequest) Execute() (StreamResultOfStreamedListObjectsResponse, *http.Response, error) {
 	return r.ApiService.StreamedListObjectsExecute(r)
+}
+
+func (r ApiStreamedListObjectsRequest) StreamedListObjectsWithChannel() (*StreamedListObjectsChannel, *http.Response, error) {
+	return r.ApiService.StreamedListObjectsWithChannel(r)
 }
 
 /*
