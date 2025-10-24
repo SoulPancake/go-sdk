@@ -28,6 +28,11 @@ coverage.txt
 # Ignore go.sum for example projects
 /example/*/go.sum
 
+# Ignore binaries in example directories
+/example/*/streamed_list_objects
+/example/*/example1
+/example/*/opentelemetry
+
 # IDEs
 .idea
 .vscode
