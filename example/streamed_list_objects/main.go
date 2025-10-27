@@ -5,10 +5,160 @@ import (
     "fmt"
     "log"
     "os"
+    "strconv"
+    "time"
 
     openfga "github.com/openfga/go-sdk"
     "github.com/openfga/go-sdk/client"
 )
+
+func runSync(ctx context.Context, fgaClient *client.OpenFgaClient, authModelId string, relation string, count int) {
+    fmt.Println("Mode: sync streaming (range over channel)")
+    request := client.ClientStreamedListObjectsRequest{Type: "document", Relation: relation, User: "user:anne"}
+    options := client.ClientStreamedListObjectsOptions{}
+    if authModelId != "" {
+        options.AuthorizationModelId = &authModelId
+    }
+    response, err := fgaClient.StreamedListObjects(ctx).Body(request).Options(options).Execute()
+    if err != nil {
+        log.Fatalf("StreamedListObjects failed: %v", err)
+    }
+    defer response.Close()
+
+    fmt.Println("Streaming objects (sync):")
+    received := 0
+    for obj := range response.Objects { // synchronous consumption
+        received++
+        fmt.Printf("  %d. %s\n", received, obj.Object)
+    }
+    if err := <-response.Errors; err != nil {
+        log.Fatalf("Error during streaming: %v", err)
+    }
+    fmt.Printf("\nTotal objects received (sync): %d (expected up to %d)\n", received, count)
+}
+
+// runAsync demonstrates asynchronous consumption using a goroutine; main goroutine can do other work.
+func runAsync(ctx context.Context, fgaClient *client.OpenFgaClient, authModelId string, relation string, count int) {
+    fmt.Println("Mode: async streaming (consume in goroutine)")
+    // Use a cancellable context to show cancellation pattern (not cancelling in this example).
+    ctx, _ = context.WithCancel(ctx)
+
+    request := client.ClientStreamedListObjectsRequest{Type: "document", Relation: relation, User: "user:anne"}
+    options := client.ClientStreamedListObjectsOptions{}
+    if authModelId != "" {
+        options.AuthorizationModelId = &authModelId
+    }
+
+    response, err := fgaClient.StreamedListObjects(ctx).Body(request).Options(options).Execute()
+    if err != nil {
+        log.Fatalf("StreamedListObjects failed: %v", err)
+    }
+    defer response.Close()
+
+    done := make(chan struct{})
+    received := 0
+
+    go func() {
+        defer close(done)
+        for obj := range response.Objects {
+            received++
+            fmt.Printf("  async -> %d. %s\n", received, obj.Object)
+        }
+        if err := <-response.Errors; err != nil && err != context.Canceled {
+            log.Fatalf("Error during async streaming: %v", err)
+        }
+    }()
+
+    // Simulate doing other work while streaming happens.
+    ticker := time.NewTicker(200 * time.Millisecond)
+    defer ticker.Stop()
+
+    fmt.Println("Performing other work while streaming...")
+    for {
+        select {
+        case <-done:
+            fmt.Printf("\nTotal objects received (async): %d (expected up to %d)\n", received, count)
+            return
+        case <-ticker.C:
+            fmt.Println("  (main goroutine still free to do work)")
+        }
+    }
+}
+
+func createTestData(ctx context.Context, fgaClient *client.OpenFgaClient, authModelId string, relation string, tupleCount int) (string, error) {
+    // Ensure relation is either viewer or owner for this simplified example.
+    if relation != "viewer" && relation != "owner" {
+        return authModelId, fmt.Errorf("unsupported relation '%s' (use viewer or owner)", relation)
+    }
+
+    if authModelId == "" {
+        fmt.Println("Creating authorization model...")
+
+        // Provide both viewer and owner relations so user can pick.
+        relations := map[string]openfga.Userset{
+            "viewer": {This: &map[string]interface{}{}},
+            "owner":  {This: &map[string]interface{}{}},
+        }
+
+        relationMetadata := map[string]openfga.RelationMetadata{
+            "viewer": {DirectlyRelatedUserTypes: &[]openfga.RelationReference{{Type: "user"}}},
+            "owner":  {DirectlyRelatedUserTypes: &[]openfga.RelationReference{{Type: "user"}}},
+        }
+
+        model := openfga.AuthorizationModel{
+            SchemaVersion: "1.1",
+            TypeDefinitions: []openfga.TypeDefinition{
+                {Type: "user"},
+                {Type: "document", Relations: &relations, Metadata: &openfga.Metadata{Relations: &relationMetadata}},
+            },
+        }
+
+        writeModelResp, err := fgaClient.WriteAuthorizationModel(ctx).Body(client.ClientWriteAuthorizationModelRequest{
+            SchemaVersion:   model.SchemaVersion,
+            TypeDefinitions: model.TypeDefinitions,
+        }).Execute()
+        if err != nil {
+            return authModelId, fmt.Errorf("failed to create authorization model: %w", err)
+        }
+        authModelId = writeModelResp.AuthorizationModelId
+        fmt.Printf("Created authorization model: %s\n\n", authModelId)
+    }
+
+    fmt.Printf("Writing %d test tuples for relation '%s'...\n", tupleCount, relation)
+    tuples := make([]client.ClientTupleKey, 0, tupleCount)
+    for i := 0; i < tupleCount; i++ {
+        tuples = append(tuples, client.ClientTupleKey{User: "user:anne", Relation: relation, Object: fmt.Sprintf("document:%d", i)})
+    }
+    if _, err := fgaClient.WriteTuples(ctx).Body(tuples).Execute(); err != nil {
+        return authModelId, fmt.Errorf("failed to write tuples: %w", err)
+    }
+    fmt.Printf("Wrote %d test tuples\n\n", len(tuples))
+    return authModelId, nil
+}
+
+func parseArgs() (mode string, count int, relation string) {
+    mode = "sync" // default
+    relation = "viewer"
+    count = 3
+    if len(os.Args) > 1 {
+        mode = os.Args[1]
+    }
+    if len(os.Args) > 2 {
+        if c, err := strconv.Atoi(os.Args[2]); err == nil && c > 0 {
+            count = c
+        }
+    } else if envCount := os.Getenv("FGA_TUPLE_COUNT"); envCount != "" {
+        if c, err := strconv.Atoi(envCount); err == nil && c > 0 {
+            count = c
+        }
+    }
+    if len(os.Args) > 3 {
+        relation = os.Args[3]
+    } else if envRel := os.Getenv("FGA_RELATION"); envRel != "" {
+        relation = envRel
+    }
+    return
+}
 
 func main() {
     ctx := context.Background()
@@ -16,175 +166,68 @@ func main() {
     if apiUrl == "" {
         apiUrl = "http://localhost:8080"
     }
-
-    config := client.ClientConfiguration{
-        ApiUrl: apiUrl,
-    }
-
+    config := client.ClientConfiguration{ApiUrl: apiUrl}
     fgaClient, err := client.NewSdkClient(&config)
     if err != nil {
         log.Fatalf("Failed to create client: %v", err)
     }
 
-    // CreateStore
-    fmt.Println("Creating Test Store for streamed list objects")
-    store, err := fgaClient.CreateStore(ctx).Body(client.ClientCreateStoreRequest{Name: "Test Store"}).Execute()
-    if err != nil {
-        panic(err)
+    // Create store unless provided via env var.
+    storeId := os.Getenv("FGA_STORE_ID")
+    createdTempStore := false
+    if storeId == "" {
+        fmt.Println("Creating Test Store for streamed list objects")
+        store, err := fgaClient.CreateStore(ctx).Body(client.ClientCreateStoreRequest{Name: "Test Store"}).Execute()
+        if err != nil {
+            panic(err)
+        }
+        storeId = store.Id
+        createdTempStore = true
     }
 
-    storeId := store.Id
-    config = client.ClientConfiguration{
-        ApiUrl:  apiUrl,
-        StoreId: storeId,
-    }
-    fgaClient, err = client.NewSdkClient(&config) // todo: need to skip this re-init thing later
+    // Re-init client with storeId
+    config = client.ClientConfiguration{ApiUrl: apiUrl, StoreId: storeId}
+    fgaClient, err = client.NewSdkClient(&config)
     if err != nil {
         log.Fatalf("Failed to create client: %v", err)
     }
 
     fmt.Println("OpenFGA StreamedListObjects Example")
-    fmt.Println("====================================")
+    fmt.Println("____________________________________")
     fmt.Printf("API URL: %s\n", apiUrl)
     fmt.Printf("Store ID: %s\n", storeId)
     fmt.Println()
 
     authModelId := os.Getenv("FGA_MODEL_ID")
+    mode, tupleCount, relation := parseArgs()
     if authModelId != "" {
-        fmt.Printf("Authorization Model ID: %s\n\n", authModelId)
+        fmt.Printf("Authorization Model ID (provided): %s\n\n", authModelId)
     }
-
-    if err := createTestData(ctx, fgaClient, authModelId); err != nil {
+    authModelId, err = createTestData(ctx, fgaClient, authModelId, relation, tupleCount)
+    if err != nil {
         log.Printf("Warning: Failed to create test data: %v", err)
         log.Println("Continuing with example...")
     }
 
-    fmt.Println("Calling StreamedListObjects...")
-    fmt.Println()
+    fmt.Printf("Selected mode: %s | relation: %s | tuple count: %d (pass 'sync|async [count] [relation]')\n\n", mode, relation, tupleCount)
 
-    request := client.ClientStreamedListObjectsRequest{
-        Type:     "document",
-        Relation: "viewer",
-        User:     "user:anne",
+    switch mode {
+    case "async":
+        runAsync(ctx, fgaClient, authModelId, relation, tupleCount)
+    case "sync":
+        runSync(ctx, fgaClient, authModelId, relation, tupleCount)
+    default:
+        fmt.Printf("Unknown mode '%s'. Use 'sync' or 'async'.\n", mode)
+        os.Exit(1)
     }
 
-    options := client.ClientStreamedListObjectsOptions{}
-    if authModelId != "" {
-        options.AuthorizationModelId = &authModelId
-    }
-
-    response, err := fgaClient.StreamedListObjects(ctx).
-        Body(request).
-        Options(options).
-        Execute()
-
-    if err != nil {
-        log.Fatalf("StreamedListObjects failed: %v", err)
-    }
-
-    defer response.Close()
-
-    fmt.Println("Streaming objects:")
-    count := 0
-    for obj := range response.Objects {
-        count++
-        fmt.Printf("  %d. %s\n", count, obj.Object)
-    }
-
-    if err := <-response.Errors; err != nil {
-        log.Fatalf("Error during streaming: %v", err)
-    }
-
-    fmt.Printf("\nTotal objects received: %d\n", count)
-
-    if count == 0 {
-        fmt.Println("\nNote: No objects found. This might be because:")
-        fmt.Println("  1. The store has no data")
-        fmt.Println("  2. The authorization model is not set up")
-        fmt.Println("  3. user:anne has no viewer relationship with any documents")
-        fmt.Println("\nYou can add test data using the Write API first.")
-    }
-}
-
-func createTestData(ctx context.Context, fgaClient *client.OpenFgaClient, authModelId string) error {
-    if authModelId == "" {
-        fmt.Println("Creating authorization model...")
-
-        viewerRelations := map[string]openfga.Userset{
-            "viewer": {
-                This: &map[string]interface{}{},
-            },
+    if createdTempStore {
+        fmt.Println("\nDeleting temporary store...")
+        if _, err := fgaClient.DeleteStore(ctx).Execute(); err != nil {
+            fmt.Printf("Failed to delete store: %v\n", err)
+        } else {
+            fmt.Printf("Deleted temporary store (%s)\n", storeId)
         }
-
-        viewerMetadata := map[string]openfga.RelationMetadata{
-            "viewer": {
-                DirectlyRelatedUserTypes: &[]openfga.RelationReference{
-                    {
-                        Type: "user",
-                    },
-                },
-            },
-        }
-
-        model := openfga.AuthorizationModel{
-            SchemaVersion: "1.1",
-            TypeDefinitions: []openfga.TypeDefinition{
-                {
-                    Type: "user",
-                },
-                {
-                    Type:      "document",
-                    Relations: &viewerRelations,
-                    Metadata: &openfga.Metadata{
-                        Relations: &viewerMetadata,
-                    },
-                },
-            },
-        }
-
-        writeModelResp, err := fgaClient.WriteAuthorizationModel(ctx).
-            Body(client.ClientWriteAuthorizationModelRequest{
-                SchemaVersion:   model.SchemaVersion,
-                TypeDefinitions: model.TypeDefinitions,
-            }).
-            Execute()
-
-        if err != nil {
-            return fmt.Errorf("failed to create authorization model: %w", err)
-        }
-
-        authModelId = writeModelResp.AuthorizationModelId
-        fmt.Printf("Created authorization model: %s\n\n", authModelId)
     }
-
-    fmt.Println("Writing test tuples...")
-
-    tuples := []client.ClientTupleKey{
-        {
-            User:     "user:anne",
-            Relation: "viewer",
-            Object:   "document:1",
-        },
-        {
-            User:     "user:anne",
-            Relation: "viewer",
-            Object:   "document:2",
-        },
-        {
-            User:     "user:anne",
-            Relation: "viewer",
-            Object:   "document:3",
-        },
-    }
-
-    _, err := fgaClient.WriteTuples(ctx).
-        Body(tuples).
-        Execute()
-
-    if err != nil {
-        return fmt.Errorf("failed to write tuples: %w", err)
-    }
-
-    fmt.Printf("Wrote %d test tuples\n\n", len(tuples))
-    return nil
+    fmt.Println("\nDone.")
 }
