@@ -44,10 +44,8 @@ type TelemetryContextKey struct{}
 
 var (
 	telemetryInstancesLock sync.Mutex
-	// Warning: do not use directly, it may cause data race.
-	// Deprecated: this map will be renamed to telemetryInstances.
-	TelemetryInstances map[*Configuration]*Telemetry
-	TelemetryContext   TelemetryContextKey
+	telemetryInstances     map[string]*Telemetry
+	TelemetryContext       TelemetryContextKey
 )
 
 func Configure(configuration *Configuration) (*Telemetry, error) {
@@ -69,19 +67,26 @@ func Get(factory TelemetryFactoryParameters) *Telemetry {
 		configuration = DefaultTelemetryConfiguration()
 	}
 
+	configHash, err := configuration.GetHash()
+	if err != nil {
+		// Fallback to a default non-shared instance if hashing fails
+		telemetry, _ := Configure(configuration)
+		return telemetry
+	}
+
 	telemetryInstancesLock.Lock()
 	defer telemetryInstancesLock.Unlock()
 
-	if TelemetryInstances == nil {
-		TelemetryInstances = make(map[*Configuration]*Telemetry)
+	if telemetryInstances == nil {
+		telemetryInstances = make(map[string]*Telemetry)
 	}
 
-	if _, exists := TelemetryInstances[configuration]; !exists {
+	if _, exists := telemetryInstances[configHash]; !exists {
 		telemetry, _ := Configure(configuration)
-		TelemetryInstances[configuration] = telemetry
+		telemetryInstances[configHash] = telemetry
 	}
 
-	return TelemetryInstances[configuration]
+	return telemetryInstances[configHash]
 }
 
 func Bind(ctx context.Context, instance *Telemetry) context.Context {
