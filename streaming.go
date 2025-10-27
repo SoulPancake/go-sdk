@@ -35,14 +35,8 @@ func (s *StreamedListObjectsChannel) Close() {
 	}
 }
 
-func (a *OpenFgaApiService) StreamedListObjectsWithChannel(r ApiStreamedListObjectsRequest) (*StreamedListObjectsChannel, *http.Response, error) {
-	ctx, cancel := context.WithCancel(r.ctx)
-
-	_, httpResponse, err := a.prepareStreamedListObjectsRequest(r)
-	if err != nil {
-		cancel()
-		return nil, httpResponse, err
-	}
+func ProcessStreamedListObjectsResponse(ctx context.Context, httpResponse *http.Response) (*StreamedListObjectsChannel, error) {
+	streamCtx, cancel := context.WithCancel(ctx)
 
 	channel := &StreamedListObjectsChannel{
 		Objects: make(chan StreamedListObjectsResponse, 10),
@@ -50,22 +44,22 @@ func (a *OpenFgaApiService) StreamedListObjectsWithChannel(r ApiStreamedListObje
 		cancel:  cancel,
 	}
 
+	if httpResponse == nil || httpResponse.Body == nil {
+		cancel()
+		return nil, errors.New("response or response body is nil")
+	}
+
 	go func() {
 		defer close(channel.Objects)
 		defer close(channel.Errors)
 		defer cancel()
-
-		if httpResponse.Body == nil {
-			channel.Errors <- errors.New("response body is nil")
-			return
-		}
 		defer httpResponse.Body.Close()
 
 		scanner := bufio.NewScanner(httpResponse.Body)
 		for scanner.Scan() {
 			select {
-			case <-ctx.Done():
-				channel.Errors <- ctx.Err()
+			case <-streamCtx.Done():
+				channel.Errors <- streamCtx.Err()
 				return
 			default:
 				line := scanner.Bytes()
@@ -90,8 +84,8 @@ func (a *OpenFgaApiService) StreamedListObjectsWithChannel(r ApiStreamedListObje
 
 				if streamResult.Result != nil {
 					select {
-					case <-ctx.Done():
-						channel.Errors <- ctx.Err()
+					case <-streamCtx.Done():
+						channel.Errors <- streamCtx.Err()
 						return
 					case channel.Objects <- *streamResult.Result:
 					}
@@ -104,20 +98,16 @@ func (a *OpenFgaApiService) StreamedListObjectsWithChannel(r ApiStreamedListObje
 		}
 	}()
 
-	return channel, httpResponse, nil
+	return channel, nil
 }
 
-func (a *OpenFgaApiService) prepareStreamedListObjectsRequest(r ApiStreamedListObjectsRequest) (*http.Request, *http.Response, error) {
+func ExecuteStreamedListObjects(client *APIClient, ctx context.Context, storeId string, body ListObjectsRequest, options RequestOptions) (*StreamedListObjectsChannel, error) {
 	path := "/stores/{store_id}/streamed-list-objects"
-	if r.storeId == "" {
-		return nil, nil, reportError("storeId is required and must be specified")
+	if storeId == "" {
+		return nil, reportError("storeId is required and must be specified")
 	}
 
-	path = strings.ReplaceAll(path, "{"+"store_id"+"}", url.PathEscape(parameterToString(r.storeId, "")))
-
-	if r.body == nil {
-		return nil, nil, reportError("body is required and must be specified")
-	}
+	path = strings.ReplaceAll(path, "{"+"store_id"+"}", url.PathEscape(parameterToString(storeId, "")))
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
@@ -126,29 +116,29 @@ func (a *OpenFgaApiService) prepareStreamedListObjectsRequest(r ApiStreamedListO
 	localVarHeaderParams["Content-Type"] = localVarHTTPContentType
 	localVarHeaderParams["Accept"] = "application/x-ndjson"
 
-	for header, val := range r.options.Headers {
+	for header, val := range options.Headers {
 		localVarHeaderParams[header] = val
 	}
 
-	req, err := a.client.prepareRequest(r.ctx, path, http.MethodPost, r.body, localVarHeaderParams, localVarQueryParams)
+	req, err := client.prepareRequest(ctx, path, http.MethodPost, body, localVarHeaderParams, localVarQueryParams)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	httpResponse, err := a.client.callAPI(req)
+	httpResponse, err := client.callAPI(req)
 	if err != nil || httpResponse == nil {
-		return req, httpResponse, err
+		return nil, err
 	}
 
 	if httpResponse.StatusCode >= http.StatusMultipleChoices {
 		responseBody, readErr := io.ReadAll(httpResponse.Body)
 		_ = httpResponse.Body.Close()
 		if readErr != nil {
-			return req, httpResponse, readErr
+			return nil, readErr
 		}
-		err = a.client.handleAPIError(httpResponse, responseBody, r.body, "StreamedListObjects", r.storeId)
-		return req, httpResponse, err
+		err = client.handleAPIError(httpResponse, responseBody, body, "StreamedListObjects", storeId)
+		return nil, err
 	}
 
-	return req, httpResponse, nil
+	return ProcessStreamedListObjectsResponse(ctx, httpResponse)
 }

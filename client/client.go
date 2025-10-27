@@ -3420,11 +3420,13 @@ func (client *OpenFgaClient) StreamedListObjectsExecute(request SdkClientStreame
 		body.Consistency = request.GetOptions().Consistency
 	}
 
-	channel, _, err := client.OpenFgaApi.
-		StreamedListObjects(request.GetContext(), *storeId).
-		Body(body).
-		Options(requestOptions).
-		StreamedListObjectsWithChannel()
+	channel, err := fgaSdk.ExecuteStreamedListObjects(
+		&client.APIClient,
+		request.GetContext(),
+		*storeId,
+		body,
+		requestOptions,
+	)
 
 	if err != nil {
 		return nil, err

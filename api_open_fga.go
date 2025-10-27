@@ -426,9 +426,9 @@ type OpenFgaApi interface {
     	}
     	```
 
-    			 * @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
-    			 * @param storeId
-    			 * @return ApiExpandRequest
+    		 * @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+    		 * @param storeId
+    		 * @return ApiExpandRequest
     */
     Expand(ctx context.Context, storeId string) ApiExpandRequest
 
@@ -788,12 +788,6 @@ type OpenFgaApi interface {
      * @return StreamResultOfStreamedListObjectsResponse
      */
     StreamedListObjectsExecute(r ApiStreamedListObjectsRequest) (StreamResultOfStreamedListObjectsResponse, *http.Response, error)
-
-    /*
-     * StreamedListObjectsWithChannel executes the request and returns a channel for streaming results
-     * @return *StreamedListObjectsChannel
-     */
-    StreamedListObjectsWithChannel(r ApiStreamedListObjectsRequest) (*StreamedListObjectsChannel, *http.Response, error)
 
     /*
     		 * Write Add or delete tuples from the store
@@ -4214,10 +4208,6 @@ func (r ApiStreamedListObjectsRequest) Options(options RequestOptions) ApiStream
 
 func (r ApiStreamedListObjectsRequest) Execute() (StreamResultOfStreamedListObjectsResponse, *http.Response, error) {
     return r.ApiService.StreamedListObjectsExecute(r)
-}
-
-func (r ApiStreamedListObjectsRequest) StreamedListObjectsWithChannel() (*StreamedListObjectsChannel, *http.Response, error) {
-    return r.ApiService.StreamedListObjectsWithChannel(r)
 }
 
 /*
