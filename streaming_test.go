@@ -76,13 +76,10 @@ func TestStreamedListObjectsWithChannel_Success(t *testing.T) {
 		User:     "user:anne",
 	}
 
-	channel, _, err := client.OpenFgaApi.
-		StreamedListObjects(ctx, "test-store").
-		Body(request).
-		StreamedListObjectsWithChannel()
+	channel, err := ExecuteStreamedListObjects(client, ctx, "test-store", request, RequestOptions{})
 
 	if err != nil {
-		t.Fatalf("StreamedListObjectsWithChannel failed: %v", err)
+		t.Fatalf("ExecuteStreamedListObjects failed: %v", err)
 	}
 
 	defer channel.Close()
@@ -137,13 +134,10 @@ func TestStreamedListObjectsWithChannel_EmptyLines(t *testing.T) {
 		User:     "user:anne",
 	}
 
-	channel, _, err := client.OpenFgaApi.
-		StreamedListObjects(ctx, "test-store").
-		Body(request).
-		StreamedListObjectsWithChannel()
+	channel, err := ExecuteStreamedListObjects(client, ctx, "test-store", request, RequestOptions{})
 
 	if err != nil {
-		t.Fatalf("StreamedListObjectsWithChannel failed: %v", err)
+		t.Fatalf("ExecuteStreamedListObjects failed: %v", err)
 	}
 
 	defer channel.Close()
@@ -185,13 +179,10 @@ func TestStreamedListObjectsWithChannel_ErrorInStream(t *testing.T) {
 		User:     "user:anne",
 	}
 
-	channel, _, err := client.OpenFgaApi.
-		StreamedListObjects(ctx, "test-store").
-		Body(request).
-		StreamedListObjectsWithChannel()
+	channel, err := ExecuteStreamedListObjects(client, ctx, "test-store", request, RequestOptions{})
 
 	if err != nil {
-		t.Fatalf("StreamedListObjectsWithChannel failed: %v", err)
+		t.Fatalf("ExecuteStreamedListObjects failed: %v", err)
 	}
 
 	defer channel.Close()
@@ -242,13 +233,10 @@ invalid json`
 		User:     "user:anne",
 	}
 
-	channel, _, err := client.OpenFgaApi.
-		StreamedListObjects(ctx, "test-store").
-		Body(request).
-		StreamedListObjectsWithChannel()
+	channel, err := ExecuteStreamedListObjects(client, ctx, "test-store", request, RequestOptions{})
 
 	if err != nil {
-		t.Fatalf("StreamedListObjectsWithChannel failed: %v", err)
+		t.Fatalf("ExecuteStreamedListObjects failed: %v", err)
 	}
 
 	defer channel.Close()
@@ -298,13 +286,10 @@ func TestStreamedListObjectsWithChannel_ContextCancellation(t *testing.T) {
 		User:     "user:anne",
 	}
 
-	channel, _, err := client.OpenFgaApi.
-		StreamedListObjects(ctx, "test-store").
-		Body(request).
-		StreamedListObjectsWithChannel()
+	channel, err := ExecuteStreamedListObjects(client, ctx, "test-store", request, RequestOptions{})
 
 	if err != nil {
-		t.Fatalf("StreamedListObjectsWithChannel failed: %v", err)
+		t.Fatalf("ExecuteStreamedListObjects failed: %v", err)
 	}
 
 	defer channel.Close()
