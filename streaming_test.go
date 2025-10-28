@@ -16,6 +16,7 @@ import (
     "context"
     "net/http"
     "net/http/httptest"
+    "strconv"
     "strings"
     "testing"
     "time"
@@ -261,7 +262,7 @@ func TestStreamedListObjectsWithChannel_ContextCancellation(t *testing.T) {
         w.Header().Set("Content-Type", "application/x-ndjson")
         w.WriteHeader(http.StatusOK)
         for i := 0; i < 100; i++ {
-            w.Write([]byte(`{"result":{"object":"document:` + string(rune('0'+i%10)) + `"}}` + "\n"))
+            w.Write([]byte(`{"result":{"object":"document:` + strconv.Itoa(i) + `"}}` + "\n"))
             if f, ok := w.(http.Flusher); ok {
                 f.Flush()
             }
@@ -425,5 +426,68 @@ func TestStreamedListObjectsWithChannel_DefaultBufferSize(t *testing.T) {
 
     if len(receivedObjects) != len(objects) {
         t.Fatalf("Expected %d objects, got %d", len(objects), len(receivedObjects))
+    }
+}
+
+func TestStreamedListObjectsWithChannel_ProperNumericStrings(t *testing.T) {
+    // Test that document IDs are generated correctly for values >= 10
+    // This verifies the fix: using strconv.Itoa(i) instead of string(rune('0'+i%10))
+    server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        w.Header().Set("Content-Type", "application/x-ndjson")
+        w.WriteHeader(http.StatusOK)
+        // Generate 15 objects to ensure we test values >= 10
+        for i := 0; i < 15; i++ {
+            w.Write([]byte(`{"result":{"object":"document:` + strconv.Itoa(i) + `"}}` + "\n"))
+        }
+    }))
+    defer server.Close()
+
+    config, err := NewConfiguration(Configuration{
+        ApiUrl: server.URL,
+    })
+    if err != nil {
+        t.Fatalf("Failed to create configuration: %v", err)
+    }
+
+    client := NewAPIClient(config)
+    ctx := context.Background()
+
+    request := ListObjectsRequest{
+        Type:     "document",
+        Relation: "viewer",
+        User:     "user:anne",
+    }
+
+    channel, err := ExecuteStreamedListObjects(client, ctx, "test-store", request, RequestOptions{})
+
+    if err != nil {
+        t.Fatalf("ExecuteStreamedListObjects failed: %v", err)
+    }
+
+    defer channel.Close()
+
+    receivedObjects := []string{}
+    for obj := range channel.Objects {
+        receivedObjects = append(receivedObjects, obj.Object)
+    }
+
+    if err := <-channel.Errors; err != nil {
+        t.Fatalf("Received error from channel: %v", err)
+    }
+
+    expectedObjects := []string{
+        "document:0", "document:1", "document:2", "document:3", "document:4",
+        "document:5", "document:6", "document:7", "document:8", "document:9",
+        "document:10", "document:11", "document:12", "document:13", "document:14",
+    }
+
+    if len(receivedObjects) != len(expectedObjects) {
+        t.Fatalf("Expected %d objects, got %d", len(expectedObjects), len(receivedObjects))
+    }
+
+    for i, expected := range expectedObjects {
+        if receivedObjects[i] != expected {
+            t.Errorf("At index %d: expected %s, got %s", i, expected, receivedObjects[i])
+        }
     }
 }
