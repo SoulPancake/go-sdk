@@ -34,6 +34,11 @@ var (
 
 type RequestOptions struct {
 	Headers map[string]string `json:"headers,omitempty"`
+	// StreamBufferSize configures the buffer size for streaming response channels.
+	// A larger buffer improves throughput for high-volume streams but increases memory usage.
+	// A smaller buffer reduces memory usage but may decrease throughput.
+	// Defaults to 10 if not specified or if set to 0.
+	StreamBufferSize int `json:"stream_buffer_size,omitempty"`
 }
 
 type OpenFgaApi interface {

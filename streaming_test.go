@@ -313,3 +313,122 @@ func TestStreamedListObjectsWithChannel_ContextCancellation(t *testing.T) {
 		t.Fatalf("Expected at least 5 objects, got %d", len(receivedObjects))
 	}
 }
+
+func TestStreamedListObjectsWithChannel_CustomBufferSize(t *testing.T) {
+	objects := []string{"document:1", "document:2", "document:3", "document:4", "document:5"}
+	expectedResults := []string{}
+	for _, obj := range objects {
+		expectedResults = append(expectedResults, `{"result":{"object":"`+obj+`"}}`)
+	}
+	responseBody := strings.Join(expectedResults, "\n")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(responseBody))
+	}))
+	defer server.Close()
+
+	config, err := NewConfiguration(Configuration{
+		ApiUrl: server.URL,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create configuration: %v", err)
+	}
+
+	client := NewAPIClient(config)
+	ctx := context.Background()
+
+	request := ListObjectsRequest{
+		Type:     "document",
+		Relation: "viewer",
+		User:     "user:anne",
+	}
+
+	// Test with custom buffer size
+	channel, err := ExecuteStreamedListObjects(client, ctx, "test-store", request, RequestOptions{
+		StreamBufferSize: 50,
+	})
+
+	if err != nil {
+		t.Fatalf("ExecuteStreamedListObjects failed: %v", err)
+	}
+
+	defer channel.Close()
+
+	receivedObjects := []string{}
+	for obj := range channel.Objects {
+		receivedObjects = append(receivedObjects, obj.Object)
+	}
+
+	if err := <-channel.Errors; err != nil {
+		t.Fatalf("Received error from channel: %v", err)
+	}
+
+	if len(receivedObjects) != len(objects) {
+		t.Fatalf("Expected %d objects, got %d", len(objects), len(receivedObjects))
+	}
+
+	for i, expected := range objects {
+		if receivedObjects[i] != expected {
+			t.Errorf("Expected object %s at index %d, got %s", expected, i, receivedObjects[i])
+		}
+	}
+}
+
+func TestStreamedListObjectsWithChannel_DefaultBufferSize(t *testing.T) {
+	objects := []string{"document:1", "document:2"}
+	expectedResults := []string{}
+	for _, obj := range objects {
+		expectedResults = append(expectedResults, `{"result":{"object":"`+obj+`"}}`)
+	}
+	responseBody := strings.Join(expectedResults, "\n")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(responseBody))
+	}))
+	defer server.Close()
+
+	config, err := NewConfiguration(Configuration{
+		ApiUrl: server.URL,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create configuration: %v", err)
+	}
+
+	client := NewAPIClient(config)
+	ctx := context.Background()
+
+	request := ListObjectsRequest{
+		Type:     "document",
+		Relation: "viewer",
+		User:     "user:anne",
+	}
+
+	// Test with default buffer size (0 or not set)
+	channel, err := ExecuteStreamedListObjects(client, ctx, "test-store", request, RequestOptions{
+		StreamBufferSize: 0,
+	})
+
+	if err != nil {
+		t.Fatalf("ExecuteStreamedListObjects failed: %v", err)
+	}
+
+	defer channel.Close()
+
+	receivedObjects := []string{}
+	for obj := range channel.Objects {
+		receivedObjects = append(receivedObjects, obj.Object)
+	}
+
+	if err := <-channel.Errors; err != nil {
+		t.Fatalf("Received error from channel: %v", err)
+	}
+
+	if len(receivedObjects) != len(objects) {
+		t.Fatalf("Expected %d objects, got %d", len(objects), len(receivedObjects))
+	}
+}
+

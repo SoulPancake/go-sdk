@@ -35,11 +35,16 @@ func (s *StreamedListObjectsChannel) Close() {
 	}
 }
 
-func ProcessStreamedListObjectsResponse(ctx context.Context, httpResponse *http.Response) (*StreamedListObjectsChannel, error) {
+func ProcessStreamedListObjectsResponse(ctx context.Context, httpResponse *http.Response, bufferSize int) (*StreamedListObjectsChannel, error) {
 	streamCtx, cancel := context.WithCancel(ctx)
 
+	// Use default buffer size of 10 if not specified or invalid
+	if bufferSize <= 0 {
+		bufferSize = 10
+	}
+
 	channel := &StreamedListObjectsChannel{
-		Objects: make(chan StreamedListObjectsResponse, 10),
+		Objects: make(chan StreamedListObjectsResponse, bufferSize),
 		Errors:  make(chan error, 1),
 		cancel:  cancel,
 	}
@@ -140,5 +145,5 @@ func ExecuteStreamedListObjects(client *APIClient, ctx context.Context, storeId 
 		return nil, err
 	}
 
-	return ProcessStreamedListObjectsResponse(ctx, httpResponse)
+	return ProcessStreamedListObjectsResponse(ctx, httpResponse, options.StreamBufferSize)
 }

@@ -3,6 +3,7 @@
 ## [Unreleased](https://github.com/openfga/go-sdk/compare/v0.7.3...HEAD)
 
 - feat: add support for StreamedListObjects endpoint
+- feat: add configurable buffer size for streaming responses via `RequestOptions.StreamBufferSize`
 
 ## v0.7.3
 
