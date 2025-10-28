@@ -3,9 +3,11 @@
 A set of examples on how to call the OpenFGA Go SDK
 
 ### Examples
-Example 1:
+**Example 1:**
 A bare bones example. It creates a store, and runs a set of calls against it including creating a model, writing tuples and checking for access.
 
+**StreamedListObjects Example:**
+Demonstrates how to use the `StreamedListObjects` API with both synchronous and asynchronous consumption patterns. Includes support for configurable buffer sizes to optimize throughput vs memory usage.
 
 ### Running the Examples
 
