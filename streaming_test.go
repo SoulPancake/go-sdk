@@ -345,10 +345,8 @@ func TestStreamedListObjectsWithChannel_CustomBufferSize(t *testing.T) {
 		User:     "user:anne",
 	}
 
-	// Test with custom buffer size
-	channel, err := ExecuteStreamedListObjects(client, ctx, "test-store", request, RequestOptions{
-		StreamBufferSize: 50,
-	})
+	// Test with custom buffer size using the new function
+	channel, err := ExecuteStreamedListObjectsWithBufferSize(client, ctx, "test-store", request, RequestOptions{}, 50)
 
 	if err != nil {
 		t.Fatalf("ExecuteStreamedListObjects failed: %v", err)
@@ -407,10 +405,8 @@ func TestStreamedListObjectsWithChannel_DefaultBufferSize(t *testing.T) {
 		User:     "user:anne",
 	}
 
-	// Test with default buffer size (0 or not set)
-	channel, err := ExecuteStreamedListObjects(client, ctx, "test-store", request, RequestOptions{
-		StreamBufferSize: 0,
-	})
+	// Test with default buffer size (0 uses default of 10)
+	channel, err := ExecuteStreamedListObjectsWithBufferSize(client, ctx, "test-store", request, RequestOptions{}, 0)
 
 	if err != nil {
 		t.Fatalf("ExecuteStreamedListObjects failed: %v", err)

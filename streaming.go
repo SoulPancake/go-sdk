@@ -107,6 +107,10 @@ func ProcessStreamedListObjectsResponse(ctx context.Context, httpResponse *http.
 }
 
 func ExecuteStreamedListObjects(client *APIClient, ctx context.Context, storeId string, body ListObjectsRequest, options RequestOptions) (*StreamedListObjectsChannel, error) {
+	return ExecuteStreamedListObjectsWithBufferSize(client, ctx, storeId, body, options, 0)
+}
+
+func ExecuteStreamedListObjectsWithBufferSize(client *APIClient, ctx context.Context, storeId string, body ListObjectsRequest, options RequestOptions, bufferSize int) (*StreamedListObjectsChannel, error) {
 	path := "/stores/{store_id}/streamed-list-objects"
 	if storeId == "" {
 		return nil, reportError("storeId is required and must be specified")
@@ -145,5 +149,5 @@ func ExecuteStreamedListObjects(client *APIClient, ctx context.Context, storeId 
 		return nil, err
 	}
 
-	return ProcessStreamedListObjectsResponse(ctx, httpResponse, options.StreamBufferSize)
+	return ProcessStreamedListObjectsResponse(ctx, httpResponse, bufferSize)
 }
