@@ -2,6 +2,8 @@
 
 ## [Unreleased](https://github.com/openfga/go-sdk/compare/v0.7.3...HEAD)
 
+- feat: add support for StreamedListObjects endpoint
+
 ## v0.7.3
 
 ### [0.7.3](https://github.com/openfga/go-sdk/compare/v0.7.2...v0.7.3) (2025-10-08)
