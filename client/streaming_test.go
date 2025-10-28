@@ -199,3 +199,131 @@ func TestClientStreamedListObjects_NoStoreId(t *testing.T) {
 		t.Fatal("Expected error for missing store ID, got nil")
 	}
 }
+
+func TestClientStreamedListObjects_CustomBufferSize(t *testing.T) {
+	objects := []string{"document:1", "document:2", "document:3", "document:4", "document:5"}
+	expectedResults := []string{}
+	for _, obj := range objects {
+		expectedResults = append(expectedResults, `{"result":{"object":"`+obj+`"}}`)
+	}
+	responseBody := strings.Join(expectedResults, "\n")
+
+	storeId := "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(responseBody))
+	}))
+	defer server.Close()
+
+	config := ClientConfiguration{
+		ApiUrl:  server.URL,
+		StoreId: storeId,
+	}
+
+	client, err := NewSdkClient(&config)
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	ctx := context.Background()
+	customBufferSize := 50
+
+	response, err := client.StreamedListObjects(ctx).
+		Body(ClientStreamedListObjectsRequest{
+			Type:     "document",
+			Relation: "viewer",
+			User:     "user:anne",
+		}).
+		Options(ClientStreamedListObjectsOptions{
+			StreamBufferSize: &customBufferSize,
+		}).
+		Execute()
+
+	if err != nil {
+		t.Fatalf("StreamedListObjects with custom buffer size failed: %v", err)
+	}
+
+	defer response.Close()
+
+	receivedObjects := []string{}
+	for obj := range response.Objects {
+		receivedObjects = append(receivedObjects, obj.Object)
+	}
+
+	if err := <-response.Errors; err != nil {
+		t.Fatalf("Received error from response: %v", err)
+	}
+
+	if len(receivedObjects) != len(objects) {
+		t.Fatalf("Expected %d objects, got %d", len(objects), len(receivedObjects))
+	}
+
+	for i, expected := range objects {
+		if receivedObjects[i] != expected {
+			t.Errorf("Expected object %s at index %d, got %s", expected, i, receivedObjects[i])
+		}
+	}
+}
+
+func TestClientStreamedListObjects_DefaultBufferSize(t *testing.T) {
+	objects := []string{"document:1", "document:2"}
+	expectedResults := []string{}
+	for _, obj := range objects {
+		expectedResults = append(expectedResults, `{"result":{"object":"`+obj+`"}}`)
+	}
+	responseBody := strings.Join(expectedResults, "\n")
+
+	storeId := "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(responseBody))
+	}))
+	defer server.Close()
+
+	config := ClientConfiguration{
+		ApiUrl:  server.URL,
+		StoreId: storeId,
+	}
+
+	client, err := NewSdkClient(&config)
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	ctx := context.Background()
+	zeroBufferSize := 0
+
+	response, err := client.StreamedListObjects(ctx).
+		Body(ClientStreamedListObjectsRequest{
+			Type:     "document",
+			Relation: "viewer",
+			User:     "user:anne",
+		}).
+		Options(ClientStreamedListObjectsOptions{
+			StreamBufferSize: &zeroBufferSize,
+		}).
+		Execute()
+
+	if err != nil {
+		t.Fatalf("StreamedListObjects with default buffer size failed: %v", err)
+	}
+
+	defer response.Close()
+
+	receivedObjects := []string{}
+	for obj := range response.Objects {
+		receivedObjects = append(receivedObjects, obj.Object)
+	}
+
+	if err := <-response.Errors; err != nil {
+		t.Fatalf("Received error from response: %v", err)
+	}
+
+	if len(receivedObjects) != len(objects) {
+		t.Fatalf("Expected %d objects, got %d", len(objects), len(receivedObjects))
+	}
+}

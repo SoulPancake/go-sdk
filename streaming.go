@@ -35,11 +35,16 @@ func (s *StreamedListObjectsChannel) Close() {
 	}
 }
 
-func ProcessStreamedListObjectsResponse(ctx context.Context, httpResponse *http.Response) (*StreamedListObjectsChannel, error) {
+func ProcessStreamedListObjectsResponse(ctx context.Context, httpResponse *http.Response, bufferSize int) (*StreamedListObjectsChannel, error) {
 	streamCtx, cancel := context.WithCancel(ctx)
 
+	// Use default buffer size of 10 if not specified or invalid
+	if bufferSize <= 0 {
+		bufferSize = 10
+	}
+
 	channel := &StreamedListObjectsChannel{
-		Objects: make(chan StreamedListObjectsResponse, 10),
+		Objects: make(chan StreamedListObjectsResponse, bufferSize),
 		Errors:  make(chan error, 1),
 		cancel:  cancel,
 	}
@@ -102,6 +107,10 @@ func ProcessStreamedListObjectsResponse(ctx context.Context, httpResponse *http.
 }
 
 func ExecuteStreamedListObjects(client *APIClient, ctx context.Context, storeId string, body ListObjectsRequest, options RequestOptions) (*StreamedListObjectsChannel, error) {
+	return ExecuteStreamedListObjectsWithBufferSize(client, ctx, storeId, body, options, 0)
+}
+
+func ExecuteStreamedListObjectsWithBufferSize(client *APIClient, ctx context.Context, storeId string, body ListObjectsRequest, options RequestOptions, bufferSize int) (*StreamedListObjectsChannel, error) {
 	path := "/stores/{store_id}/streamed-list-objects"
 	if storeId == "" {
 		return nil, reportError("storeId is required and must be specified")
@@ -140,5 +149,5 @@ func ExecuteStreamedListObjects(client *APIClient, ctx context.Context, storeId 
 		return nil, err
 	}
 
-	return ProcessStreamedListObjectsResponse(ctx, httpResponse)
+	return ProcessStreamedListObjectsResponse(ctx, httpResponse, bufferSize)
 }

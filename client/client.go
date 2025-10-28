@@ -3330,6 +3330,11 @@ type ClientStreamedListObjectsOptions struct {
 	AuthorizationModelId *string                       `json:"authorization_model_id,omitempty"`
 	StoreId              *string                       `json:"store_id,omitempty"`
 	Consistency          *fgaSdk.ConsistencyPreference `json:"consistency,omitempty"`
+	// StreamBufferSize configures the buffer size for streaming response channels.
+	// A larger buffer improves throughput for high-volume streams but increases memory usage.
+	// A smaller buffer reduces memory usage but may decrease throughput.
+	// Defaults to 10 if not specified or if set to 0.
+	StreamBufferSize *int `json:"stream_buffer_size,omitempty"`
 }
 
 type ClientStreamedListObjectsResponse struct {
@@ -3415,17 +3420,22 @@ func (client *OpenFgaClient) StreamedListObjectsExecute(request SdkClientStreame
 		AuthorizationModelId: authorizationModelId,
 	}
 	requestOptions := RequestOptions{}
+	bufferSize := 0
 	if request.GetOptions() != nil {
 		requestOptions = request.GetOptions().RequestOptions
 		body.Consistency = request.GetOptions().Consistency
+		if request.GetOptions().StreamBufferSize != nil {
+			bufferSize = *request.GetOptions().StreamBufferSize
+		}
 	}
 
-	channel, err := fgaSdk.ExecuteStreamedListObjects(
+	channel, err := fgaSdk.ExecuteStreamedListObjectsWithBufferSize(
 		&client.APIClient,
 		request.GetContext(),
 		*storeId,
 		body,
 		requestOptions,
+		bufferSize,
 	)
 
 	if err != nil {

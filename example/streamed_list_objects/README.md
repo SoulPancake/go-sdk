@@ -18,16 +18,18 @@ It creates (if not provided) a temporary store and authorization model, writes m
 - `FGA_MODEL_ID` (optional; if absent a simple model is created)
 - `FGA_TUPLE_COUNT` (optional; number of tuples to write; overridden by CLI arg if passed)
 - `FGA_RELATION` (optional; relation used when writing and listing; must be `viewer` or `owner`; overridden by CLI arg if passed)
+- `FGA_BUFFER_SIZE` (optional; buffer size for streaming channel; defaults to 10 if not set; overridden by CLI arg if passed)
 
 ## CLI Arguments
 
 ```
-go run . [mode] [tupleCount] [relation]
+go run . [mode] [tupleCount] [relation] [bufferSize]
 ```
 
 - `mode`: `sync` (default) or `async`
 - `tupleCount`: positive integer (default: 3 if omitted and env var not set)
 - `relation`: `viewer` or `owner` (default: `viewer`)
+- `bufferSize`: positive integer (optional; sets the streaming channel buffer size; defaults to 10)
 
 Examples:
 
@@ -41,10 +43,27 @@ go run . sync 10 owner
 # Async mode with 50 tuples and viewer relation
 go run . async 50 viewer
 
-# Using environment variables (relation owner, 25 tuples)
+# Sync mode with custom buffer size of 100
+go run . sync 10 viewer 100
+
+# Using environment variables (relation owner, 25 tuples, buffer size 50)
 export FGA_TUPLE_COUNT=25
 export FGA_RELATION=owner
+export FGA_BUFFER_SIZE=50
 go run . async
+```
+
+## Buffer Size Configuration
+
+The `bufferSize` parameter (4th CLI argument or `FGA_BUFFER_SIZE` env var) controls the size of the internal channel buffer used for streaming responses:
+
+- **Larger buffers** (e.g., 100+) improve throughput for high-volume streams but use more memory
+- **Smaller buffers** (e.g., 1-10) reduce memory usage but may decrease throughput
+- **Default value** is 10, providing a balanced approach for most use cases
+
+Example with large buffer for high-volume streaming:
+```bash
+go run . async 1000 viewer 200
 ```
 
 ## What Happens Internally
@@ -54,8 +73,8 @@ go run . async
 3. Tuple writes: `user:anne` assigned chosen relation for `document:0 .. document:N-1`
 4. Streaming request (`StreamedListObjects`) for the chosen relation
 5. Consumption pattern:
-   - Sync: range directly over `response.Objects`
-   - Async: consume in a goroutine while main goroutine reports progress
+    - Sync: range directly over `response.Objects`
+    - Async: consume in a goroutine while main goroutine reports progress
 6. Final error check via `response.Errors`
 7. Temporary store deletion (only if the example created it)
 
@@ -73,7 +92,7 @@ Created authorization model: 01ARZ3NDEKTSV4RRFFQ69G5FAX
 Writing 3 test tuples for relation 'viewer'...
 Wrote 3 test tuples
 
-Selected mode: sync | relation: viewer | tuple count: 3 (pass 'sync|async [count] [relation]')
+Selected mode: sync | relation: viewer | tuple count: 3 (pass 'sync|async [count] [relation] [bufferSize]')
 Mode: sync streaming (range over channel)
 Streaming objects (sync):
   1. document:0
@@ -88,7 +107,7 @@ Deleted temporary store (01ARZ3NDEKTSV4RRFFQ69G5FAV)
 Done.
 ```
 
-## Expected Output (Async Mode Example)
+## Expected Output (Async Mode with Custom Buffer Size)
 
 ```
 OpenFGA StreamedListObjects Example
@@ -102,8 +121,9 @@ Created authorization model: 01ARZ3NDEKTSV4RRFFQ69G5FAX
 Writing 5 test tuples for relation 'owner'...
 Wrote 5 test tuples
 
-Selected mode: async | relation: owner | tuple count: 5 (pass 'sync|async [count] [relation]')
+Selected mode: async | relation: owner | tuple count: 5 | buffer size: 50 (pass 'sync|async [count] [relation] [bufferSize]')
 Mode: async streaming (consume in goroutine)
+Using custom buffer size: 50
 Performing other work while streaming...
   (main goroutine still free to do work)
   async -> 1. document:0
@@ -121,4 +141,3 @@ Deleted temporary store (01ARZ3NDEKTSV4RRFFQ69G5FAV)
 
 Done.
 ```
-

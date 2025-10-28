@@ -12,12 +12,16 @@ import (
 	"github.com/openfga/go-sdk/client"
 )
 
-func runSync(ctx context.Context, fgaClient *client.OpenFgaClient, authModelId string, relation string, count int) {
+func runSync(ctx context.Context, fgaClient *client.OpenFgaClient, authModelId string, relation string, count int, bufferSize *int) {
 	fmt.Println("Mode: sync streaming (range over channel)")
 	request := client.ClientStreamedListObjectsRequest{Type: "document", Relation: relation, User: "user:anne"}
 	options := client.ClientStreamedListObjectsOptions{}
 	if authModelId != "" {
 		options.AuthorizationModelId = &authModelId
+	}
+	if bufferSize != nil {
+		options.StreamBufferSize = bufferSize
+		fmt.Printf("Using custom buffer size: %d\n", *bufferSize)
 	}
 	response, err := fgaClient.StreamedListObjects(ctx).Body(request).Options(options).Execute()
 	if err != nil {
@@ -38,7 +42,7 @@ func runSync(ctx context.Context, fgaClient *client.OpenFgaClient, authModelId s
 }
 
 // runAsync demonstrates asynchronous consumption using a goroutine; main goroutine can do other work.
-func runAsync(ctx context.Context, fgaClient *client.OpenFgaClient, authModelId string, relation string, count int) {
+func runAsync(ctx context.Context, fgaClient *client.OpenFgaClient, authModelId string, relation string, count int, bufferSize *int) {
 	fmt.Println("Mode: async streaming (consume in goroutine)")
 	// Use a cancellable context to show cancellation pattern (not cancelling in this example).
 	ctx, _ = context.WithCancel(ctx)
@@ -47,6 +51,10 @@ func runAsync(ctx context.Context, fgaClient *client.OpenFgaClient, authModelId 
 	options := client.ClientStreamedListObjectsOptions{}
 	if authModelId != "" {
 		options.AuthorizationModelId = &authModelId
+	}
+	if bufferSize != nil {
+		options.StreamBufferSize = bufferSize
+		fmt.Printf("Using custom buffer size: %d\n", *bufferSize)
 	}
 
 	response, err := fgaClient.StreamedListObjects(ctx).Body(request).Options(options).Execute()
@@ -136,7 +144,7 @@ func createTestData(ctx context.Context, fgaClient *client.OpenFgaClient, authMo
 	return authModelId, nil
 }
 
-func parseArgs() (mode string, count int, relation string) {
+func parseArgs() (mode string, count int, relation string, bufferSize *int) {
 	mode = "sync" // default
 	relation = "viewer"
 	count = 3
@@ -156,6 +164,15 @@ func parseArgs() (mode string, count int, relation string) {
 		relation = os.Args[3]
 	} else if envRel := os.Getenv("FGA_RELATION"); envRel != "" {
 		relation = envRel
+	}
+	if len(os.Args) > 4 {
+		if b, err := strconv.Atoi(os.Args[4]); err == nil && b > 0 {
+			bufferSize = &b
+		}
+	} else if envBuffer := os.Getenv("FGA_BUFFER_SIZE"); envBuffer != "" {
+		if b, err := strconv.Atoi(envBuffer); err == nil && b > 0 {
+			bufferSize = &b
+		}
 	}
 	return
 }
@@ -199,7 +216,7 @@ func main() {
 	fmt.Println()
 
 	authModelId := os.Getenv("FGA_MODEL_ID")
-	mode, tupleCount, relation := parseArgs()
+	mode, tupleCount, relation, bufferSize := parseArgs()
 	if authModelId != "" {
 		fmt.Printf("Authorization Model ID (provided): %s\n\n", authModelId)
 	}
@@ -209,13 +226,17 @@ func main() {
 		log.Println("Continuing with example...")
 	}
 
-	fmt.Printf("Selected mode: %s | relation: %s | tuple count: %d (pass 'sync|async [count] [relation]')\n\n", mode, relation, tupleCount)
+	fmt.Printf("Selected mode: %s | relation: %s | tuple count: %d", mode, relation, tupleCount)
+	if bufferSize != nil {
+		fmt.Printf(" | buffer size: %d", *bufferSize)
+	}
+	fmt.Printf(" (pass 'sync|async [count] [relation] [bufferSize]')\n\n")
 
 	switch mode {
 	case "async":
-		runAsync(ctx, fgaClient, authModelId, relation, tupleCount)
+		runAsync(ctx, fgaClient, authModelId, relation, tupleCount, bufferSize)
 	case "sync":
-		runSync(ctx, fgaClient, authModelId, relation, tupleCount)
+		runSync(ctx, fgaClient, authModelId, relation, tupleCount, bufferSize)
 	default:
 		fmt.Printf("Unknown mode '%s'. Use 'sync' or 'async'.\n", mode)
 		os.Exit(1)
