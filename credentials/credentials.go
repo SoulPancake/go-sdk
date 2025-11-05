@@ -111,7 +111,7 @@ func (c *Credentials) GetHttpClientAndHeaderOverrides(retryParams retryutils.Ret
 // transport will be used as the base transport for the OAuth2 transport.
 func (c *Credentials) GetHttpClientAndHeaderOverridesWithBaseClient(retryParams retryutils.RetryParams, debug bool, baseClient *http.Client) (*http.Client, []*HeaderParams) {
 	var headers []*HeaderParams
-	var client *http.Client
+	var client *http.Client = nil
 	switch c.Method {
 	case CredentialsMethodClientCredentials:
 		requestConfig := clientcredentials.RequestConfig{

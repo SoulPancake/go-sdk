@@ -65,7 +65,10 @@ func NewAPIClient(cfg *Configuration) *APIClient {
 
 	// Process credentials if provided
 	if cfg.Credentials != nil {
-		cfg.Credentials.Context = context.Background()
+		// Set context if not already provided
+		if cfg.Credentials.Context == nil {
+			cfg.Credentials.Context = context.Background()
+		}
 		telemetry.Bind(cfg.Credentials.Context, telemetry.Get(telemetry.TelemetryFactoryParameters{Configuration: cfg.Telemetry}))
 
 		// Pass the existing HTTPClient as base client to allow combining custom transport with credentials
