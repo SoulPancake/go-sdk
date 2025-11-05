@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/openfga/go-sdk/internal/utils/retryutils"
+	"github.com/openfga/go-sdk/oauth2"
 	"github.com/openfga/go-sdk/oauth2/clientcredentials"
 )
 
@@ -101,8 +102,14 @@ func (c *Credentials) GetApiTokenHeader() *HeaderParams {
 // The main export the client uses to get a configuration with the necessary
 // httpClient and header overrides based on the chosen credential method
 func (c *Credentials) GetHttpClientAndHeaderOverrides(retryParams retryutils.RetryParams, debug bool) (*http.Client, []*HeaderParams) {
+	return c.GetHttpClientAndHeaderOverridesWithBaseClient(retryParams, debug, nil)
+}
+
+// GetHttpClientAndHeaderOverridesWithBaseClient allows specifying a base HTTP client
+// to combine custom transport settings with credentials.
+func (c *Credentials) GetHttpClientAndHeaderOverridesWithBaseClient(retryParams retryutils.RetryParams, debug bool, baseClient *http.Client) (*http.Client, []*HeaderParams) {
 	var headers []*HeaderParams
-	var client = http.DefaultClient
+	var client *http.Client = nil
 	switch c.Method {
 	case CredentialsMethodClientCredentials:
 		requestConfig := clientcredentials.RequestConfig{
@@ -128,14 +135,34 @@ func (c *Credentials) GetHttpClientAndHeaderOverrides(retryParams retryutils.Ret
 		if c.Context == nil {
 			c.Context = context.Background()
 		}
-		client = ccConfig.Client(c.Context)
+
+		if baseClient != nil {
+			ctx := context.WithValue(c.Context, oauth2.HTTPClient, baseClient)
+			client = ccConfig.Client(ctx)
+
+			// Preserve custom client settings
+			if baseClient.Timeout != 0 {
+				client.Timeout = baseClient.Timeout
+			}
+			if baseClient.CheckRedirect != nil {
+				client.CheckRedirect = baseClient.CheckRedirect
+			}
+			if baseClient.Jar != nil {
+				client.Jar = baseClient.Jar
+			}
+		} else {
+			client = ccConfig.Client(c.Context)
+		}
 	case CredentialsMethodApiToken:
 		var header = c.GetApiTokenHeader()
 		if header != nil {
 			headers = append(headers, header)
 		}
+		client = baseClient
 	case CredentialsMethodNone:
+		client = baseClient
 	default:
+		client = baseClient
 	}
 
 	return client, headers

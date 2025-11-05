@@ -57,22 +57,36 @@ func NewAPIClient(cfg *Configuration) *APIClient {
 	if cfg.Telemetry == nil {
 		cfg.Telemetry = telemetry.DefaultTelemetryConfiguration()
 	}
-	if cfg.HTTPClient == nil {
-		if cfg.Credentials == nil {
-			cfg.HTTPClient = http.DefaultClient
-		} else {
+
+	if cfg.DefaultHeaders == nil {
+		cfg.DefaultHeaders = make(map[string]string)
+	}
+
+	if cfg.Credentials != nil {
+		if cfg.Credentials.Context == nil {
 			cfg.Credentials.Context = context.Background()
-			telemetry.Bind(cfg.Credentials.Context, telemetry.Get(telemetry.TelemetryFactoryParameters{Configuration: cfg.Telemetry}))
-			var httpClient, headers = cfg.Credentials.GetHttpClientAndHeaderOverrides(retryutils.GetRetryParamsOrDefault(cfg.RetryParams), cfg.Debug)
-			if len(headers) > 0 {
-				for idx := range headers {
-					cfg.AddDefaultHeader(headers[idx].Key, headers[idx].Value)
-				}
-			}
-			if httpClient != nil {
-				cfg.HTTPClient = httpClient
+		}
+		telemetry.Bind(cfg.Credentials.Context, telemetry.Get(telemetry.TelemetryFactoryParameters{Configuration: cfg.Telemetry}))
+
+		var httpClient, headers = cfg.Credentials.GetHttpClientAndHeaderOverridesWithBaseClient(
+			retryutils.GetRetryParamsOrDefault(cfg.RetryParams),
+			cfg.Debug,
+			cfg.HTTPClient,
+		)
+
+		if len(headers) > 0 {
+			for idx := range headers {
+				cfg.AddDefaultHeader(headers[idx].Key, headers[idx].Value)
 			}
 		}
+
+		if httpClient != nil {
+			cfg.HTTPClient = httpClient
+		}
+	}
+
+	if cfg.HTTPClient == nil {
+		cfg.HTTPClient = http.DefaultClient
 	}
 
 	c := &APIClient{}
