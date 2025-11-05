@@ -18,7 +18,7 @@ func main() {
 
 	fmt.Println("\n=== Demo: Custom HTTPClient Only (Should Work) ===")
 	testCustomHTTPClientOnly()
-	
+
 	fmt.Println("\n=== Demo: API Token Credentials + Custom HTTPClient (Should Work) ===")
 	testApiTokenWithCustomHTTPClient()
 }
@@ -75,17 +75,17 @@ func testCustomHTTPClientWithCredentials() {
 	}
 
 	config := fgaClient.APIClient.GetConfig()
-	
+
 	// The HTTPClient should be different from the custom one (wrapped with OAuth2 transport)
 	// But it should preserve the custom client's settings
 	if config.HTTPClient != customClient {
 		fmt.Println("✓ HTTPClient was wrapped with credentials transport")
-		
+
 		// Check if the timeout was preserved
 		if config.HTTPClient.Timeout == customClient.Timeout {
 			fmt.Println("✓ Custom HTTPClient timeout was preserved (30s)")
 		} else {
-			fmt.Printf("✗ Custom HTTPClient timeout was NOT preserved (got %v, expected %v)\n", 
+			fmt.Printf("✗ Custom HTTPClient timeout was NOT preserved (got %v, expected %v)\n",
 				config.HTTPClient.Timeout, customClient.Timeout)
 		}
 		fmt.Println("✓ FIXED: Both credentials and custom HTTPClient were honored")
@@ -138,11 +138,11 @@ func testApiTokenWithCustomHTTPClient() {
 	}
 
 	config := fgaClient.APIClient.GetConfig()
-	
+
 	// For API Token, the custom client should be used directly (not wrapped)
 	if config.HTTPClient == customClient {
 		fmt.Println("✓ HTTPClient is the custom client")
-		
+
 		// Check if the authorization header was added
 		if authHeader, exists := config.DefaultHeaders["Authorization"]; exists {
 			if authHeader == "Bearer test-api-token" {
@@ -153,7 +153,7 @@ func testApiTokenWithCustomHTTPClient() {
 		} else {
 			fmt.Println("✗ Authorization header was not added")
 		}
-		
+
 		fmt.Println("✓ Both API Token credentials and custom HTTPClient were honored")
 	} else {
 		fmt.Println("✗ HTTPClient was changed when it shouldn't have been")

@@ -137,13 +137,13 @@ func (c *Credentials) GetHttpClientAndHeaderOverridesWithBaseClient(retryParams 
 		if c.Context == nil {
 			c.Context = context.Background()
 		}
-		
+
 		// If a base client is provided, use it to create the OAuth client
 		if baseClient != nil {
 			// Store the base client in context so oauth2 can use it
 			ctx := context.WithValue(c.Context, oauth2.HTTPClient, baseClient)
 			client = ccConfig.Client(ctx)
-			
+
 			// Copy client settings from base client to preserve custom configurations
 			// Note: oauth2.NewClient creates a new http.Client with only the Transport from base
 			// We need to manually copy other settings like Timeout, CheckRedirect, Jar, etc.
