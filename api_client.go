@@ -58,40 +58,33 @@ func NewAPIClient(cfg *Configuration) *APIClient {
 		cfg.Telemetry = telemetry.DefaultTelemetryConfiguration()
 	}
 
-	// Ensure DefaultHeaders is initialized
 	if cfg.DefaultHeaders == nil {
 		cfg.DefaultHeaders = make(map[string]string)
 	}
 
-	// Process credentials if provided
 	if cfg.Credentials != nil {
-		// Set context if not already provided
 		if cfg.Credentials.Context == nil {
 			cfg.Credentials.Context = context.Background()
 		}
 		telemetry.Bind(cfg.Credentials.Context, telemetry.Get(telemetry.TelemetryFactoryParameters{Configuration: cfg.Telemetry}))
 
-		// Pass the existing HTTPClient as base client to allow combining custom transport with credentials
 		var httpClient, headers = cfg.Credentials.GetHttpClientAndHeaderOverridesWithBaseClient(
 			retryutils.GetRetryParamsOrDefault(cfg.RetryParams),
 			cfg.Debug,
 			cfg.HTTPClient,
 		)
 
-		// Add credential headers (for ApiToken method)
 		if len(headers) > 0 {
 			for idx := range headers {
 				cfg.AddDefaultHeader(headers[idx].Key, headers[idx].Value)
 			}
 		}
 
-		// Use the credentials-generated client if available
 		if httpClient != nil {
 			cfg.HTTPClient = httpClient
 		}
 	}
 
-	// Set default HTTPClient if still nil
 	if cfg.HTTPClient == nil {
 		cfg.HTTPClient = http.DefaultClient
 	}

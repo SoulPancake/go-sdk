@@ -105,10 +105,8 @@ func (c *Credentials) GetHttpClientAndHeaderOverrides(retryParams retryutils.Ret
 	return c.GetHttpClientAndHeaderOverridesWithBaseClient(retryParams, debug, nil)
 }
 
-// GetHttpClientAndHeaderOverridesWithBaseClient
-// Similar to GetHttpClientAndHeaderOverrides but allows specifying a base HTTP client.
-// If baseClient is provided and credentials use ClientCredentials method, the baseClient's
-// transport will be used as the base transport for the OAuth2 transport.
+// GetHttpClientAndHeaderOverridesWithBaseClient allows specifying a base HTTP client
+// to combine custom transport settings with credentials.
 func (c *Credentials) GetHttpClientAndHeaderOverridesWithBaseClient(retryParams retryutils.RetryParams, debug bool, baseClient *http.Client) (*http.Client, []*HeaderParams) {
 	var headers []*HeaderParams
 	var client *http.Client = nil
@@ -138,15 +136,11 @@ func (c *Credentials) GetHttpClientAndHeaderOverridesWithBaseClient(retryParams 
 			c.Context = context.Background()
 		}
 
-		// If a base client is provided, use it to create the OAuth client
 		if baseClient != nil {
-			// Store the base client in context so oauth2 can use it
 			ctx := context.WithValue(c.Context, oauth2.HTTPClient, baseClient)
 			client = ccConfig.Client(ctx)
 
-			// Copy client settings from base client to preserve custom configurations
-			// Note: oauth2.NewClient creates a new http.Client with only the Transport from base
-			// We need to manually copy other settings like Timeout, CheckRedirect, Jar, etc.
+			// Preserve custom client settings
 			if baseClient.Timeout != 0 {
 				client.Timeout = baseClient.Timeout
 			}
@@ -164,7 +158,6 @@ func (c *Credentials) GetHttpClientAndHeaderOverridesWithBaseClient(retryParams 
 		if header != nil {
 			headers = append(headers, header)
 		}
-		// For ApiToken, we can use the base client directly since we're just adding headers
 		client = baseClient
 	case CredentialsMethodNone:
 		client = baseClient
