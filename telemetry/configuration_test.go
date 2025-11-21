@@ -4,6 +4,50 @@ import (
 	"testing"
 )
 
+func TestGetHash(t *testing.T) {
+	config1 := DefaultTelemetryConfiguration()
+	config2 := DefaultTelemetryConfiguration()
+
+	hash1, err := config1.GetHash()
+	if err != nil {
+		t.Fatalf("Expected no error, but got %v", err)
+	}
+
+	hash2, err := config2.GetHash()
+	if err != nil {
+		t.Fatalf("Expected no error, but got %v", err)
+	}
+
+	if hash1 != hash2 {
+		t.Fatalf("Expected identical configurations to produce the same hash, but got %s and %s", hash1, hash2)
+	}
+
+	if hash1 == "" {
+		t.Fatalf("Expected non-empty hash")
+	}
+}
+
+func TestGetHashDifferentConfigurations(t *testing.T) {
+	config1 := DefaultTelemetryConfiguration()
+	config2 := &Configuration{
+		Metrics: &MetricsConfiguration{},
+	}
+
+	hash1, err := config1.GetHash()
+	if err != nil {
+		t.Fatalf("Expected no error, but got %v", err)
+	}
+
+	hash2, err := config2.GetHash()
+	if err != nil {
+		t.Fatalf("Expected no error, but got %v", err)
+	}
+
+	if hash1 == hash2 {
+		t.Fatalf("Expected different configurations to produce different hashes, but both produced %s", hash1)
+	}
+}
+
 func TestDefaultTelemetryConfiguration(t *testing.T) {
 	config := DefaultTelemetryConfiguration()
 

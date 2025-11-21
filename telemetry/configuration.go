@@ -1,5 +1,11 @@
 package telemetry
 
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+)
+
 type AttributeConfiguration struct {
 	Enabled bool `json:"enabled,omitempty"`
 }
@@ -31,6 +37,16 @@ type MetricsConfiguration struct {
 
 type Configuration struct {
 	Metrics *MetricsConfiguration `json:"metrics,omitempty"`
+}
+
+func (config *Configuration) GetHash() (string, error) {
+	configJSON, err := json.Marshal(config)
+	if err != nil {
+		return "", err
+	}
+
+	hash := sha256.Sum256(configJSON)
+	return hex.EncodeToString(hash[:]), nil
 }
 
 func DefaultTelemetryConfiguration() *Configuration {
