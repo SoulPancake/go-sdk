@@ -1,3 +1,18 @@
+// NOTE: This example is currently commented out because streamedListObjects is not publicly accessible
+// in the client layer. It may be made public in a future release.
+//
+// To use this example in the future when the method becomes public, uncomment the code below
+// and change the call from streamedListObjects to StreamedListObjects.
+
+package main
+
+func main() {
+	// Example temporarily disabled - streamedListObjects is not publicly accessible
+}
+
+/*
+// Original example code (commented out):
+
 package main
 
 import (
@@ -199,3 +214,4 @@ func handleError(err error) {
 	}
 	os.Exit(1)
 }
+*/
