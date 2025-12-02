@@ -1,8 +1,10 @@
 // NOTE: This example is currently commented out because streamedListObjects is not publicly accessible
 // in the client layer. It may be made public in a future release.
 //
-// To use this example in the future when the method becomes public, uncomment the code below
-// and change the call from streamedListObjects to StreamedListObjects.
+// To use this example in the future when the method becomes public:
+// 1. Uncomment the code below
+// 2. Change the call from streamedListObjects to StreamedListObjects
+// 3. Remove the placeholder main() function above
 
 package main
 
@@ -12,8 +14,6 @@ func main() {
 
 /*
 // Original example code (commented out):
-
-package main
 
 import (
 	"context"
